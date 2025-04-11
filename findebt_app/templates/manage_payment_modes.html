@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Manage Payment Modes - FinDebtSync</title>
+    <!-- Bootstrap CSS CDN -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body {
+            background-color: #f8f9fa;
+        }
+        .payment-container {
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 30px;
+            background-color: white;
+            border-radius: 10px;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+        }
+        .logo {
+            font-size: 2.2rem;
+            font-weight: 700;
+            color: #336699;
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .payment-category {
+            font-weight: 600;
+            color: #336699;
+            margin-top: 20px;
+            margin-bottom: 10px;
+        }
+        .form-check {
+            margin-bottom: 10px;
+            padding-left: 30px;
+        }
+        .btn-primary {
+            background-color: #336699;
+            border-color: #336699;
+            width: 100%;
+            padding: 10px;
+            font-weight: 600;
+            margin-top: 30px;
+        }
+        .btn-primary:hover {
+            background-color: #265180;
+            border-color: #265180;
+        }
+        .current-modes {
+            background-color: #f8f9fa;
+            padding: 20px;
+            border-radius: 5px;
+            margin-bottom: 30px;
+        }
+        .compatibility-score {
+            font-size: 0.9rem;
+            color: #6c757d;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="payment-container">
+            <div class="logo">FinDebtSync</div>
+            <h2 class="text-center mb-4">Manage Payment Modes</h2>
+            
+            <!-- Current Payment Modes -->
+            <div class="current-modes">
+                <h5>Current Payment Modes</h5>
+                {% if current_modes %}
+                    <div class="row">
+                        {% for mode in current_modes %}
+                            <div class="col-md-6">
+                                <div class="card mb-3">
+                                    <div class="card-body">
+                                        <h6 class="card-title">{{ mode.compatible_mode.name }}</h6>
+                                        <p class="card-text">
+                                            <small class="text-muted">{{ mode.compatible_mode.get_category_display }}</small>
+                                        </p>
+                                        <div class="compatibility-score">
+                                            Compatibility Score: {{ mode.compatibility_score }}%
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        {% endfor %}
+                    </div>
+                {% else %}
+                    <p class="text-muted">No payment modes selected yet.</p>
+                {% endif %}
+            </div>
+            
+            <!-- Payment Mode Selection Form -->
+            <form method="post" novalidate>
+                {% csrf_token %}
+                
+                {% if form.errors %}
+                    <div class="alert alert-danger">
+                        Please select at least one payment mode.
+                    </div>
+                {% endif %}
+                
+                <div class="payment-modes">
+                    {% regroup form.payment_modes.field.queryset.all by get_category_display as category_list %}
+                    
+                    {% for category in category_list %}
+                        <h5 class="payment-category">{{ category.grouper }}</h5>
+                        
+                        {% for payment_mode in category.list %}
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" 
+                                       name="{{ form.payment_modes.name }}" 
+                                       value="{{ payment_mode.id }}" 
+                                       id="payment_{{ payment_mode.id }}"
+                                       {% if form.payment_modes.initial and payment_mode.id in form.payment_modes.initial %}
+                                       checked
+                                       {% endif %}>
+                                <label class="form-check-label" for="payment_{{ payment_mode.id }}">
+                                    {{ payment_mode.name }}
+                                    {% if payment_mode.description %}
+                                        <small class="text-muted d-block">{{ payment_mode.description }}</small>
+                                    {% endif %}
+                                </label>
+                            </div>
+                        {% endfor %}
+                    {% endfor %}
+                </div>
+                
+                <button type="submit" class="btn btn-primary">Update Payment Modes</button>
+                <a href="{% url 'dashboard' %}" class="btn btn-secondary mt-2">Cancel</a>
+            </form>
+        </div>
+    </div>
+    
+    <!-- Bootstrap JS Bundle -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html> 

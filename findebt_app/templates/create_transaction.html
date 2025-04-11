@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Create Transaction - FinDebtSync</title>
+    <!-- Bootstrap CSS CDN -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body {
+            background-color: #f8f9fa;
+        }
+        .transaction-container {
+            max-width: 600px;
+            margin: 50px auto;
+            padding: 30px;
+            background-color: white;
+            border-radius: 10px;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+        }
+        .logo {
+            font-size: 2.2rem;
+            font-weight: 700;
+            color: #336699;
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .form-group {
+            margin-bottom: 20px;
+        }
+        .btn-primary {
+            background-color: #336699;
+            border-color: #336699;
+            width: 100%;
+            padding: 10px;
+            font-weight: 600;
+            margin-top: 20px;
+        }
+        .btn-primary:hover {
+            background-color: #265180;
+            border-color: #265180;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="transaction-container">
+            <div class="logo">FinDebtSync</div>
+            <h2 class="text-center mb-4">Create New Transaction</h2>
+            
+            <form method="post" novalidate>
+                {% csrf_token %}
+                
+                {% if form.errors %}
+                    <div class="alert alert-danger">
+                        Please correct the errors below.
+                    </div>
+                {% endif %}
+                
+                <div class="form-group">
+                    <label for="{{ form.receiver.id_for_label }}">Receiver</label>
+                    {{ form.receiver }}
+                    {% if form.receiver.errors %}
+                        <div class="invalid-feedback d-block">
+                            {{ form.receiver.errors }}
+                        </div>
+                    {% endif %}
+                </div>
+                
+                <div class="form-group">
+                    <label for="{{ form.amount.id_for_label }}">Amount ($)</label>
+                    {{ form.amount }}
+                    {% if form.amount.errors %}
+                        <div class="invalid-feedback d-block">
+                            {{ form.amount.errors }}
+                        </div>
+                    {% endif %}
+                </div>
+                
+                <div class="form-group">
+                    <label for="{{ form.payment_mode.id_for_label }}">Payment Mode</label>
+                    {{ form.payment_mode }}
+                    {% if form.payment_mode.errors %}
+                        <div class="invalid-feedback d-block">
+                            {{ form.payment_mode.errors }}
+                        </div>
+                    {% endif %}
+                </div>
+                
+                <div class="form-group">
+                    <label for="{{ form.description.id_for_label }}">Description</label>
+                    {{ form.description }}
+                    {% if form.description.errors %}
+                        <div class="invalid-feedback d-block">
+                            {{ form.description.errors }}
+                        </div>
+                    {% endif %}
+                </div>
+                
+                <button type="submit" class="btn btn-primary">Create Transaction</button>
+                <a href="{% url 'dashboard' %}" class="btn btn-secondary mt-2">Cancel</a>
+            </form>
+        </div>
+    </div>
+    
+    <!-- Bootstrap JS Bundle -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html> 
