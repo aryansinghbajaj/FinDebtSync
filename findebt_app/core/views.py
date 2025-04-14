@@ -1,14 +1,15 @@
 from django.shortcuts import render, redirect
-from django.contrib.auth import login, authenticate
-from django.contrib.auth.decorators import login_required
-from django.contrib import messages
+from django.contrib.auth import login, authenticate #login - logs in the user and authenticate checks the user details
+from django.contrib.auth.decorators import login_required #use to restrict view access to authenticate users only
+from django.contrib import messages #framework for flashing messages to the user
 from .forms import UserRegistrationForm, PaymentModeSelectionForm, TransactionForm, DebtSettlementForm, PaymentModeManagementForm
 from .models import PaymentMode, BankCustomer, PaymentCompatibility, DebtSettlement, Transaction
 from .utils import minimize_transactions
-from django.db import transaction
-from django.db.models import Q
-from django.db import models
-from decimal import Decimal
+from django.db import transaction #transaction is used for atomic operations ensures that all the changes inside the block are done together or not at all
+from django.db.models import Q #allowing complex queries using AND,OR,NOT
+from django.db import models #use for defining model field
+from decimal import Decimal # for decimal arithmetic precision
+from django.db.models import Sum #use for summing up values
 
 def home(request):
     return render(request, 'home.html')
@@ -52,7 +53,7 @@ def payment_modes(request):
                 name=name,
                 category=category,
                 description=description
-            ) #the payment mode are saved if the do not exist already
+            ) #they payment modes are saved if they are not there automatically
     
     if request.method == 'POST':
         form = PaymentModeSelectionForm(request.POST)
@@ -63,11 +64,11 @@ def payment_modes(request):
     else:
         # Pre-select any existing preferences
         initial_data = {}
-        existing_modes = PaymentCompatibility.objects.filter(customer=customer)
+        existing_modes = PaymentCompatibility.objects.filter(customer=customer) #getting any pre existing payment modes of the logged in bank customer
         if existing_modes.exists():
-            initial_data['payment_modes'] = [pm.compatible_mode.id for pm in existing_modes]
+            initial_data['payment_modes'] = [pm.compatible_mode.id for pm in existing_modes] #if they exist they are appending in an array
         
-        form = PaymentModeSelectionForm(initial=initial_data) # a form is created with prefilled data
+        form = PaymentModeSelectionForm(initial=initial_data) # a blank form created with initial data
     
     return render(request, 'payment_modes.html', {'form': form})
 
@@ -102,7 +103,7 @@ def dashboard(request):
 
 @login_required
 def create_transaction(request):
-    customer = request.user.bank_profile
+    customer = request.user.bank_profile #getting the profile of the logged in customer
     
     if request.method == 'POST':
         form = TransactionForm(request.POST, sender=customer)
@@ -120,57 +121,95 @@ def create_transaction(request):
 
 @login_required
 def initiate_settlement(request):
-    customer = request.user.bank_profile
-    
     if request.method == 'POST':
-        form = DebtSettlementForm(request.POST, initiator=customer)
+        form = DebtSettlementForm(request.POST, initiator=request.user.bank_profile)
         if form.is_valid():
-            participants = form.cleaned_data['participants']
-            participants = list(participants) + [customer]  # Include initiator
+            participants = list(form.cleaned_data['participants'])
+            participants.append(request.user.bank_profile)  # Add initiator to participants
             
             # Get optimized transactions
-            optimized_transactions, organizations = minimize_transactions(participants)
+            transactions, net_amounts = minimize_transactions(participants)
             
-            if optimized_transactions:
-                # Create a new debt settlement
-                with transaction.atomic():
-                    debt_settlement = DebtSettlement.objects.create(
-                        initiator=customer,
-                        participant=participants[0],  # First participant
-                        net_amount=sum(t[1] for t in optimized_transactions)
-                    )
-                    
-                    # Update transaction statuses and link to settlement
-                    for path, amount, modes in optimized_transactions:
-                        # Get all pending transactions between these participants
-                        transactions = Transaction.objects.filter(
-                            Q(sender__in=participants, receiver__in=participants),
-                            status='PENDING'
-                        )
-                        
-                        # Update transactions
-                        for t in transactions:
-                            t.status = 'SETTLED'
-                            t.settlement = debt_settlement
-                            t.save()
+            # Use database transaction to ensure all updates are atomic
+            with transaction.atomic():
+                # First, clean up any existing pending settlements between these participants
+                DebtSettlement.objects.filter(
+                    (Q(initiator=request.user.bank_profile) & Q(participant__in=participants)) |
+                    (Q(participant=request.user.bank_profile) & Q(initiator__in=participants)),
+                    status='PENDING'
+                ).delete()
                 
-                messages.success(request, "Debt settlement created successfully!")
-                return redirect('dashboard')
-            else:
-                messages.warning(request, "No transactions could be optimized.")
+                # Create settlement records for each participant
+                settlements = []
+                for participant in participants:
+                    if participant != request.user.bank_profile:  # Don't create settlement with self
+                        # Calculate net amount between initiator and participant
+                        net_amount = net_amounts.get((request.user.bank_profile, participant), Decimal('0.00'))
+                        if net_amount == 0:
+                            net_amount = net_amounts.get((participant, request.user.bank_profile), Decimal('0.00'))
+                            
+                        # Only create settlement if there's a non-zero net amount
+                        if net_amount != 0:
+                            settlement = DebtSettlement.objects.create(
+                                initiator=request.user.bank_profile,
+                                participant=participant,
+                                status='COMPLETED',  # Create as COMPLETED directly
+                                net_amount=abs(net_amount)  # Store absolute value of net amount
+                            )
+                            settlements.append(settlement)
+                
+                # Update related transactions to 'SETTLED' status and link them to settlements
+                affected_transactions = Transaction.objects.filter(
+                    (Q(sender__in=participants) & Q(receiver__in=participants)) &
+                    Q(status='PENDING')
+                )
+                
+                # Update each transaction and recalculate balances
+                for trans in affected_transactions:
+                    # Reverse the original transaction effect
+                    trans.sender.net_amount += trans.amount
+                    trans.receiver.net_amount -= trans.amount
+                    
+                    # Update transaction status
+                    trans.status = 'SETTLED'
+                    
+                    # Save changes
+                    trans.sender.save()
+                    trans.receiver.save()
+                    trans.save()
+                    
+                    # Link transaction to relevant settlements
+                    for settlement in settlements:
+                        if (trans.sender == settlement.initiator and trans.receiver == settlement.participant) or \
+                           (trans.sender == settlement.participant and trans.receiver == settlement.initiator):
+                            settlement.transactions.add(trans)
+                
+                # Store optimized transactions
+                context = {
+                    'optimized_transactions': [],
+                    'settlements': settlements
+                }
+                
+                for path, amount, modes in transactions:
+                    if len(path) == 2:
+                        # Direct transfer
+                        transaction_str = f"{path[0].user.username} → {path[1].user.username}: ${amount} via {modes[0]}"
+                    else:
+                        # Via bank
+                        transaction_str = f"{path[0].user.username} → bank → {path[2].user.username}: ${amount} via {modes[0]} and {modes[1]}"
+                    context['optimized_transactions'].append(transaction_str)
+            
+            return render(request, 'settlement_result.html', context)
     else:
-        form = DebtSettlementForm(initiator=customer)
+        form = DebtSettlementForm(initiator=request.user.bank_profile)
     
-    return render(request, 'initiate_settlement.html', {
-        'form': form,
-        'customer': customer
-    })
+    return render(request, 'initiate_settlement.html', {'form': form})
 
 @login_required
 def transaction_history(request):
     customer = request.user.bank_profile
     
-    # Get all transactions where the customer is either sender or receiver
+    # getting all the transactions where the user is either a sender or a receiver
     transactions = Transaction.objects.filter(
         Q(sender=customer) | Q(receiver=customer)
     ).order_by('-created_at')
