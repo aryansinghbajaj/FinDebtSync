@@ -75,19 +75,33 @@ def get_common_payment_mode(customer1, customer2):
 def minimize_transactions(participants):
     """Optimize transactions using bank as intermediary when needed"""
     transactions = []
-    net_amounts = {}  # Dictionary to store net amounts between participants
+    net_amounts = {}
     
     # Get or create bank customer
     bank_user, _ = User.objects.get_or_create(username='bank', defaults={'email': 'bank@system.com'})
     bank_customer, _ = BankCustomer.objects.get_or_create(user=bank_user)
     
-    # Calculate net amounts
-    for p in participants:
-        sent = Transaction.objects.filter(sender=p, status='PENDING').aggregate(Sum('amount'))['amount__sum'] or 0
-        received = Transaction.objects.filter(receiver=p, status='PENDING').aggregate(Sum('amount'))['amount__sum'] or 0
+    # Add bank to participants if not already present
+    if bank_customer not in participants:
+        participants.append(bank_customer)
+    
+    # Create Organization objects for each participant
+    organizations = []
+    org_map = {}  # Map BankCustomer to their index in organizations list
+    
+    for i, p in enumerate(participants):
+        # Calculate net amount
+        sent = Transaction.objects.filter(sender=p, status='PENDING').aggregate(Sum('amount'))['amount__sum'] or Decimal('0')
+        received = Transaction.objects.filter(receiver=p, status='PENDING').aggregate(Sum('amount'))['amount__sum'] or Decimal('0')
         net_amount = received - sent
         p.net_amount = net_amount
         p.save()
+        
+        # Create Organization object
+        org = Organization(p)
+        org.net_amount = net_amount
+        organizations.append(org)
+        org_map[p] = i
         
         # Store net amounts between participants
         for other in participants:
@@ -108,40 +122,40 @@ def minimize_transactions(participants):
                 if net != 0:
                     net_amounts[(p, other)] = net
     
+    num_orgs = len(organizations)
+    
     # Find debtors and creditors
-    debtors = [p for p in participants if p.net_amount < 0]
-    creditors = [p for p in participants if p.net_amount > 0]
+    debtors = [(i, org) for i, org in enumerate(organizations) if org.net_amount < 0]
+    creditors = [(i, org) for i, org in enumerate(organizations) if org.net_amount > 0]
     
     while debtors and creditors:
-        debtor = debtors[0]
-        creditor = creditors[0]
-        amount = min(abs(debtor.net_amount), creditor.net_amount)
+        debtor_idx, debtor = debtors[0]
+        creditor_idx, creditor = creditors[0]
         
-        # Try direct transfer
-        common_mode = get_common_payment_mode(debtor, creditor)
+        # Find path using BFS
+        path_result = find_path_bfs(debtor_idx, creditor_idx, organizations, num_orgs)
         
-        if common_mode:
-            # Direct transfer possible
-            transactions.append(([debtor, creditor], amount, [common_mode]))
-        else:
-            # Use bank as intermediary
-            debtor_bank_mode = get_common_payment_mode(debtor, bank_customer)
-            bank_creditor_mode = get_common_payment_mode(bank_customer, creditor)
+        if path_result:
+            # Get the amount to transfer
+            amount = min(abs(organizations[path_result.path[0]].net_amount),
+                        organizations[path_result.path[-1]].net_amount)
             
-            if debtor_bank_mode and bank_creditor_mode:
-                # Transfer through bank
-                transactions.append(([debtor, bank_customer, creditor], amount, [debtor_bank_mode, bank_creditor_mode]))
-            else:
-                print(f"No valid path found between {debtor.user.username} and {creditor.user.username}")
-                continue
-        
-        # Update balances
-        debtor.net_amount += amount
-        creditor.net_amount -= amount
+            # Create transaction record
+            path_customers = [organizations[i].bank_customer for i in path_result.path]
+            transactions.append((path_customers, amount, path_result.payment_modes))
+            
+            # Update balances
+            organizations[path_result.path[0]].net_amount += amount
+            organizations[path_result.path[-1]].net_amount -= amount
+        else:
+            print(f"No valid path found between {debtor.bank_customer.user.username} and {creditor.bank_customer.user.username}")
+            # Remove this pair from consideration
+            debtors.pop(0)
+            continue
         
         # Update debtors and creditors lists
-        debtors = [p for p in participants if p.net_amount < 0]
-        creditors = [p for p in participants if p.net_amount > 0]
+        debtors = [(i, org) for i, org in enumerate(organizations) if org.net_amount < 0]
+        creditors = [(i, org) for i, org in enumerate(organizations) if org.net_amount > 0]
     
     return transactions, net_amounts
 

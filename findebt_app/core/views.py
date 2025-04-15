@@ -75,7 +75,7 @@ def payment_modes(request):
 
 @login_required #ensuring only authenticated(logged-in) users can access the dashboard view
 def dashboard(request):
-    customer = request.user.bank_profile #retrieving the customer profile
+    customer = request.user.bank_profile
     
     # Getting the payment modes that are compatible with customer
     payment_modes = PaymentCompatibility.objects.filter(customer=customer)
@@ -87,7 +87,6 @@ def dashboard(request):
     net_position = customer.get_net_position()
     total_debt = customer.get_total_debt_owed()
     total_credit = customer.get_total_credit_received()
-    pending_settlements = customer.get_pending_settlements_count()
     
     context = {
         'customer': customer,
@@ -96,7 +95,6 @@ def dashboard(request):
         'net_position': net_position,
         'total_debt': total_debt,
         'total_credit': total_credit,
-        'pending_settlements': pending_settlements,
     }
     
     return render(request, 'dashboard.html', context)

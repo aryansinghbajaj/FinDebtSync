@@ -3,238 +3,191 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>FinDebtSync Dashboard</title>
-    <!-- Bootstrap CSS -->
-    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
+    <title>Dashboard - FinDebtSync</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <style>
         body {
             background-color: #f8f9fa;
-            padding-top: 20px;
+            font-family: 'Arial', sans-serif;
         }
         .navbar {
+            background-color: #0d6efd;
+            margin-bottom: 30px;
+        }
+        .navbar-brand, .nav-link {
+            color: white !important;
+        }
+        .financial-card {
+            padding: 20px;
+            border-radius: 10px;
+            color: white;
             margin-bottom: 20px;
+        }
+        .net-position {
+            background-color: #0d6efd;
+        }
+        .total-debt {
+            background-color: #ffc107;
+            color: black;
+        }
+        .total-credit {
+            background-color: #20c997;
+        }
+        .quick-actions {
+            margin: 30px 0;
+            padding: 20px;
+            background-color: white;
+            border-radius: 10px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .transactions-section {
+            background-color: white;
+            border-radius: 10px;
+            padding: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .status-badge {
+            padding: 5px 10px;
+            border-radius: 15px;
+            font-size: 0.9em;
+        }
+        .status-pending {
+            background-color: #ffc107;
+            color: black;
+        }
+        .status-completed {
+            background-color: #198754;
+            color: white;
+        }
+        .status-cancelled {
+            background-color: #dc3545;
+            color: white;
+        }
+        .status-settled {
+            background-color: #0dcaf0;
+            color: white;
+        }
+        .transaction-type {
+            padding: 3px 8px;
+            border-radius: 12px;
+            font-size: 0.85em;
+        }
+        .type-sent {
+            background-color: #ffc107;
+            color: black;
+        }
+        .type-received {
+            background-color: #198754;
+            color: white;
         }
     </style>
 </head>
 <body>
     <!-- Navigation -->
-    <nav class="navbar navbar-expand-lg navbar-dark bg-primary">
+    <nav class="navbar navbar-expand-lg">
         <div class="container">
             <a class="navbar-brand" href="{% url 'home' %}">FinDebtSync</a>
-            <button class="navbar-toggler" type="button" data-toggle="collapse" data-target="#navbarNav" aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav" aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
                 <span class="navbar-toggler-icon"></span>
             </button>
             <div class="collapse navbar-collapse" id="navbarNav">
-                <ul class="navbar-nav mr-auto">
+                <ul class="navbar-nav me-auto">
                     <li class="nav-item">
                         <a class="nav-link" href="{% url 'home' %}">Home</a>
                     </li>
-                    {% if user.is_authenticated %}
                     <li class="nav-item">
                         <a class="nav-link" href="{% url 'dashboard' %}">Dashboard</a>
                     </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="{% url 'payment_modes' %}">Manage Payment Modes</a>
-                    </li>
-                    {% endif %}
                 </ul>
-                <ul class="navbar-nav ml-auto">
-                    {% if user.is_authenticated %}
+                <ul class="navbar-nav">
                     <li class="nav-item dropdown">
-                        <a class="nav-link dropdown-toggle" href="#" id="navbarDropdown" role="button" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
+                        <a class="nav-link dropdown-toggle" href="#" id="navbarDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
                             {{ user.username }}
                         </a>
-                        <div class="dropdown-menu" aria-labelledby="navbarDropdown">
-                            <a class="dropdown-item" href="{% url 'dashboard' %}">Dashboard</a>
-                            <div class="dropdown-divider"></div>
-                            <a class="dropdown-item" href="{% url 'logout' %}">Logout</a>
-                        </div>
+                        <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="navbarDropdown">
+                            <li><a class="dropdown-item" href="{% url 'dashboard' %}">Dashboard</a></li>
+                            <li><hr class="dropdown-divider"></li>
+                            <li><a class="dropdown-item" href="{% url 'logout' %}">Logout</a></li>
+                        </ul>
                     </li>
-                    {% else %}
-                    <li class="nav-item">
-                        <a class="nav-link" href="{% url 'login' %}">Login</a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="{% url 'register' %}">Register</a>
-                    </li>
-                    {% endif %}
                 </ul>
             </div>
         </div>
     </nav>
 
-    <!-- Main Content -->
-    <main>
-        {% if messages %}
-        <div class="container">
-            {% for message in messages %}
-            <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
-                {{ message }}
-                <button type="button" class="close" data-dismiss="alert" aria-label="Close">
-                    <span aria-hidden="true">&times;</span>
-                </button>
-            </div>
-            {% endfor %}
-        </div>
-        {% endif %}
-
-        <!-- Dashboard Content -->
-        <div class="container mt-4">
-            <h1 class="mb-4">Welcome to FinDebtSync, {{ customer.user.username }}</h1>
-            
-            <!-- Financial Overview Cards -->
-            <div class="row mb-4">
-                <!-- Net Financial Position -->
-                <div class="col-md-3">
-                    <div class="card {% if net_position < 0 %}bg-danger{% elif net_position > 0 %}bg-success{% else %}bg-primary{% endif %} text-white">
-                        <div class="card-body">
-                            <h5 class="card-title">Net Position</h5>
-                            <h3 class="card-text">${{ net_position|floatformat:2 }}</h3>
-                        </div>
-                    </div>
-                </div>
-                
-                <!-- Total Debt -->
-                <div class="col-md-3">
-                    <div class="card bg-warning text-dark">
-                        <div class="card-body">
-                            <h5 class="card-title">Total Debt Owed</h5>
-                            <h3 class="card-text">${{ total_debt|floatformat:2 }}</h3>
-                        </div>
-                    </div>
-                </div>
-                
-                <!-- Total Credit -->
-                <div class="col-md-3">
-                    <div class="card bg-info text-white">
-                        <div class="card-body">
-                            <h5 class="card-title">Total Credit</h5>
-                            <h3 class="card-text">${{ total_credit|floatformat:2 }}</h3>
-                        </div>
-                    </div>
-                </div>
-                
-                <!-- Pending Settlements -->
-                <div class="col-md-3">
-                    <div class="card bg-secondary text-white">
-                        <div class="card-body">
-                            <h5 class="card-title">Pending Settlements</h5>
-                            <h3 class="card-text">{{ pending_settlements }}</h3>
-                        </div>
-                    </div>
+    <div class="container mt-4">
+        <h1 class="mb-4">Welcome to FinDebtSync, {{ customer.user.username }}</h1>
+        
+        <div class="row">
+            <div class="col-md-4">
+                <div class="financial-card net-position">
+                    <h5>Net Position</h5>
+                    <h2>${{ net_position }}</h2>
                 </div>
             </div>
-            
-            <!-- Quick Action Buttons -->
-            <div class="row mb-4">
-                <div class="col-12">
-                    <div class="card">
-                        <div class="card-body">
-                            <h5 class="card-title">Quick Actions</h5>
-                            <div class="btn-group" role="group">
-                                <a href="{% url 'create_transaction' %}" class="btn btn-primary mr-2">Create Transaction</a>
-                                <a href="{% url 'initiate_settlement' %}" class="btn btn-success mr-2">Initiate Settlement</a>
-                                <a href="{% url 'transaction_history' %}" class="btn btn-info mr-2">Transaction History</a>
-                                <a href="{% url 'manage_payment_modes' %}" class="btn btn-secondary">Manage Payment Modes</a>
-                            </div>
-                        </div>
-                    </div>
+            <div class="col-md-4">
+                <div class="financial-card total-debt">
+                    <h5>Total Debt Owed</h5>
+                    <h2>${{ total_debt }}</h2>
                 </div>
             </div>
-            
-            <!-- Recent Transactions -->
-            <div class="row mb-4">
-                <div class="col-12">
-                    <div class="card">
-                        <div class="card-header">
-                            <h5 class="card-title mb-0">Recent Transactions</h5>
-                        </div>
-                        <div class="card-body">
-                            {% if recent_transactions %}
-                                <div class="table-responsive">
-                                    <table class="table table-striped">
-                                        <thead>
-                                            <tr>
-                                                <th>Date</th>
-                                                <th>Type</th>
-                                                <th>Amount</th>
-                                                <th>Status</th>
-                                                <th>Payment Mode</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            {% for transaction in recent_transactions %}
-                                            <tr>
-                                                <td>{{ transaction.created_at|date:"M d, Y" }}</td>
-                                                <td>
-                                                    {% if transaction.sender == customer %}
-                                                        <span class="badge badge-warning">Sent</span> to {{ transaction.receiver.user.username }}
-                                                    {% else %}
-                                                        <span class="badge badge-success">Received</span> from {{ transaction.sender.user.username }}
-                                                    {% endif %}
-                                                </td>
-                                                <td>${{ transaction.amount|floatformat:2 }}</td>
-                                                <td><span class="badge {% if transaction.status == 'COMPLETED' %}badge-success{% elif transaction.status == 'PENDING' %}badge-warning{% elif transaction.status == 'CANCELLED' %}badge-danger{% else %}badge-info{% endif %}">{{ transaction.status }}</span></td>
-                                                <td>{{ transaction.payment_mode.name }}</td>
-                                            </tr>
-                                            {% endfor %}
-                                        </tbody>
-                                    </table>
-                                </div>
-                            {% else %}
-                                <div class="alert alert-info">
-                                    No transactions yet. Your recent financial activities will appear here.
-                                </div>
-                            {% endif %}
-                        </div>
-                    </div>
-                </div>
-            </div>
-            
-            <!-- Payment Modes -->
-            <div class="row mb-4">
-                <div class="col-12">
-                    <div class="card">
-                        <div class="card-header">
-                            <h5 class="card-title mb-0">Your Payment Modes</h5>
-                        </div>
-                        <div class="card-body">
-                            {% if payment_modes %}
-                                <div class="row">
-                                    {% for pm in payment_modes %}
-                                        <div class="col-md-4 mb-3">
-                                            <div class="card border-0 shadow-sm">
-                                                <div class="card-body">
-                                                    <span class="badge {% if pm.compatible_mode.category == 'BANK' %}badge-primary{% elif pm.compatible_mode.category == 'DIGITAL' %}badge-success{% elif pm.compatible_mode.category == 'CARD' %}badge-info{% elif pm.compatible_mode.category == 'CRYPTO' %}badge-warning{% else %}badge-secondary{% endif %} mb-2">{{ pm.compatible_mode.get_category_display }}</span>
-                                                    <h5 class="card-title">{{ pm.compatible_mode.name }}</h5>
-                                                    <p class="card-text small text-muted">{{ pm.compatible_mode.description|default:"No description available" }}</p>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    {% endfor %}
-                                </div>
-                            {% else %}
-                                <div class="alert alert-warning">
-                                    You haven't set up any payment modes yet. <a href="{% url 'payment_modes' %}">Click here</a> to set up your preferred payment methods.
-                                </div>
-                            {% endif %}
-                        </div>
-                    </div>
+            <div class="col-md-4">
+                <div class="financial-card total-credit">
+                    <h5>Total Credit</h5>
+                    <h2>${{ total_credit }}</h2>
                 </div>
             </div>
         </div>
-    </main>
 
-    <!-- Footer -->
-    <footer class="bg-light py-4 mt-5">
-        <div class="container text-center">
-            <p class="mb-0">© 2025 FinDebtSync. All rights reserved.</p>
+        <div class="quick-actions">
+            <h3>Quick Actions</h3>
+            <div class="btn-group">
+                <a href="{% url 'create_transaction' %}" class="btn btn-primary">Create Transaction</a>
+                <a href="{% url 'initiate_settlement' %}" class="btn btn-success">Initiate Settlement</a>
+                <a href="{% url 'transaction_history' %}" class="btn btn-info">Transaction History</a>
+                <a href="{% url 'manage_payment_modes' %}" class="btn btn-secondary">Manage Payment Modes</a>
+            </div>
         </div>
-    </footer>
 
-    <!-- JavaScript -->
-    <script src="https://code.jquery.com/jquery-3.5.1.slim.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/popper.js@1.16.1/dist/umd/popper.min.js"></script>
-    <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
+        <div class="transactions-section">
+            <h3>Recent Transactions</h3>
+            <div class="table-responsive">
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>Date</th>
+                            <th>Type</th>
+                            <th>Amount</th>
+                            <th>Status</th>
+                            <th>Payment Mode</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for transaction in recent_transactions %}
+                        <tr>
+                            <td>{{ transaction.created_at|date:"M d, Y" }}</td>
+                            <td>
+                                {% if transaction.sender == customer %}
+                                <span class="transaction-type type-sent">Sent</span> to {{ transaction.receiver.user.username }}
+                                {% else %}
+                                <span class="transaction-type type-received">Received</span> from {{ transaction.sender.user.username }}
+                                {% endif %}
+                            </td>
+                            <td>${{ transaction.amount }}</td>
+                            <td>
+                                <span class="status-badge status-{{ transaction.status|lower }}">
+                                    {{ transaction.status }}
+                                </span>
+                            </td>
+                            <td>{{ transaction.payment_mode.name }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 </body>
 </html>
